@@ -4,16 +4,23 @@
 #include <fstream>
 #include <vector>
 #include <sstream>
+#include <map>
 
-using namespace std;
+//using namespace std;
+unsigned int userId = 0;
 struct kontakt {
     int id = 0;
-    string imie = "";
-    string nazwisko = "";
-    string telefon = "";
-    string email = "";
-    string adres = "";
+    std::string imie = "";
+    std::string nazwisko = "";
+    std::string telefon = "";
+    std::string email = "";
+    std::string adres = "";
 };
+struct User {
+    int id = 0;
+    std::string username = "", password = "";
+};
+
 void split(const std::string &s, char delim, std::vector<std::string> &elems) {
     std::stringstream ss(s);
     std::string item;
@@ -26,70 +33,122 @@ std::vector<std::string> split(const std::string &s, char delim) {
     split(s, delim, elems);
     return elems;
 }
-void wyswietlMenuGlowne(string header = "Ksiazka kadresowa") {
-    cout << "\n" << header << "\n";
-    cout << "____________________________\n\n";
-    cout << "1. Wpisz nowy kontakt\n";
-    cout << "2. Wyszukaj kontakt\n";
-    cout << "3. Wyswietl wszystkie kontakty\n";
-    cout << "0. Zamknij program\n";
-    cout << "____________________________\n";
+void deleteFile(std::string fileName) {
+    if( remove( fileName.c_str() ) != 0 )
+        perror( "Error deleting file" );
+    else
+        puts( "File successfully deleted" );
 }
-void zapiszKontaktDoPliku(kontakt &kontaktDoZapisania, fstream &plik) {
-    plik << endl;
+void wyswietlMenuGlowne(std::string header = "Ksiazka kadresowa") {
+    std::cout << "\n" << header << "\n";
+    std::cout << "____________________________\n\n";
+    std::cout << "1. Wpisz nowy kontakt\n";
+    std::cout << "2. Wyszukaj kontakt\n";
+    std::cout << "3. Wyswietl wszystkie kontakty\n";
+    std::cout << "0. Zamknij aplikacje\n";
+    std::cout << "____________________________\n";
+}
+void zapiszKontaktDoPliku(kontakt &kontaktDoZapisania, std::fstream &plik, unsigned int & signedInUserId) {
+    plik << std::endl;
     plik << kontaktDoZapisania.id << "|";
+    plik << signedInUserId << "|";
     plik << kontaktDoZapisania.imie << "|";
     plik << kontaktDoZapisania.nazwisko << "|";
     plik << kontaktDoZapisania.telefon << "|";;
     plik << kontaktDoZapisania.email << "|";
     plik << kontaktDoZapisania.adres;
 }
-void zaktualizujPlik( std::vector<kontakt> &ksiazkaAdresowa) {
-    fstream plik;
-    plik.open("ksiazkaAdresowa_vec.txt", ios::out | ios::trunc);
-    for (std::vector<kontakt>::iterator itr = ksiazkaAdresowa.begin(), finish = ksiazkaAdresowa.end();
-            itr != finish; itr++) {
-        kontakt biezacyKontakt = *itr;
-        zapiszKontaktDoPliku(biezacyKontakt, plik);
+void createFileIfNotExist(std::string fileName) {
+    std::fstream file;
+    file.open(fileName, std::ios::in);
+    if (file.good() == false) {
+        std::ofstream file(fileName);
+        file.open(fileName, std::ios::in);
+        system("cls");
+        file.close();
     }
-    plik.close();
+    file.close();
+}
+kontakt wczytajKontaktZPliku(std::fstream &plik, unsigned int &registeredUserId) {
+    std::string temp;
+    std::vector<std::string> linijkaKontaktu;
+    kontakt wczytanyKontakt;
+    getline(plik, temp);
+    linijkaKontaktu = split(temp, '|');
+    registeredUserId = stoi(linijkaKontaktu[1]);
+    wczytanyKontakt.id = stoi(linijkaKontaktu[0]);
+    wczytanyKontakt.imie = linijkaKontaktu[2];
+    wczytanyKontakt.nazwisko = linijkaKontaktu[3];
+    wczytanyKontakt.telefon = linijkaKontaktu[4];
+    wczytanyKontakt.email = linijkaKontaktu[5];
+    wczytanyKontakt.adres = linijkaKontaktu[6];
+    return wczytanyKontakt;
+}
+void zaktualizujPlik( std::vector<kontakt> &ksiazkaAdresowa ) {
+    std::fstream plikTymczasowy;
+    std::string fileName = "ksiazkaAdresowa_vec_temp.txt";
+    createFileIfNotExist(fileName);
+    std::fstream baseFile;
+    std::string baseFileName = "ksiazkaAdresowa_vec.txt";
+    std::string lineFromBaseFile = "";
+    kontakt baseContact;
+    unsigned int addressId = 0;
+    plikTymczasowy.open(fileName, std::ios::out | std::ios::trunc);
+    baseFile.open(baseFileName, std::ios::in);
+    getline(baseFile, lineFromBaseFile);
+
+    while (!baseFile.eof()) {
+        baseContact = wczytajKontaktZPliku(baseFile, addressId);
+        if (addressId != userId) {
+            zapiszKontaktDoPliku(baseContact, plikTymczasowy, addressId);
+        } else {
+            for (std::vector<kontakt>::iterator itr = ksiazkaAdresowa.begin(), finishItr = ksiazkaAdresowa.end();
+                    itr != finishItr; itr++) {
+                if (baseContact.id == itr->id) zapiszKontaktDoPliku(*itr, plikTymczasowy, userId);
+            }
+        }
+    }
+    plikTymczasowy.close();
+    baseFile.close();
+    deleteFile(baseFileName);
+    rename(fileName.c_str(), baseFileName.c_str());
 }
 void dodajNowyKontakt(std::vector<kontakt> &ksiazkaAdresowa, int &ostatnieId) {
 
     kontakt* nowyKontakt = new kontakt;
     ostatnieId++;
     nowyKontakt->id = ostatnieId;
-    string temp;
-    cout << "Podaj imie: ";
-    getline(cin, nowyKontakt->imie);
-    cout << "Podaj nazwisko: ";
-    getline(cin, nowyKontakt->nazwisko);
-    cout << "Podaj telefon: ";
-    getline(cin, temp);
+    std::string temp;
+    std::cout << "Podaj imie: ";
+    getline(std::cin, nowyKontakt->imie);
+    std::cout << "Podaj nazwisko: ";
+    getline(std::cin, nowyKontakt->nazwisko);
+    std::cout << "Podaj telefon: ";
+    getline(std::cin, temp);
     nowyKontakt->telefon = temp;
-    cout << "Podaj adres e-mail: ";
-    getline(cin, nowyKontakt->email);
-    cout << "Podaj adres: ";
-    getline(cin, nowyKontakt->adres);
+    std::cout << "Podaj adres e-mail: ";
+    getline(std::cin, nowyKontakt->email);
+    std::cout << "Podaj adres: ";
+    getline(std::cin, nowyKontakt->adres);
     ksiazkaAdresowa.push_back(*nowyKontakt);
     delete nowyKontakt;
 }
 void formatWyswietlania(kontakt* biezacyKontakt) {
-    cout << "\nId \t\t\t"          << biezacyKontakt->id << endl;
-    cout << "Imie: \t\t\t"         << biezacyKontakt->imie << endl;
-    cout << "Nazwisko: \t\t"         << biezacyKontakt->nazwisko << endl;
-    cout << "Nr telefonu: \t\t"      << biezacyKontakt->telefon << endl;
-    cout << "Adres e-mail: \t\t"     << biezacyKontakt->email << endl;
-    cout << "Adres zamieszkania: \t" << biezacyKontakt->adres << endl;
+    std::cout << "\nId \t\t\t"          << biezacyKontakt->id << std::endl;
+    std::cout << "Imie: \t\t\t"         << biezacyKontakt->imie << std::endl;
+    std::cout << "Nazwisko: \t\t"         << biezacyKontakt->nazwisko << std::endl;
+    std::cout << "Nr telefonu: \t\t"      << biezacyKontakt->telefon << std::endl;
+    std::cout << "Adres e-mail: \t\t"     << biezacyKontakt->email << std::endl;
+    std::cout << "Adres zamieszkania: \t" << biezacyKontakt->adres << std::endl;
 }
-void wyswietlPodmenuSzukaj(string header = "Wyszukaj kontakt") {
+void wyswietlPodmenuSzukaj(std::string header = "Wyszukaj kontakt") {
     system("cls");
-    cout << "\n" << header << "\n";
-    cout << "____________________________\n\n";
-    cout << "1. Podaj imie\n";
-    cout << "2. Podaj nazwisko\n";
-    cout << "0. Powrot do menu glownego\n";
-    cout << "____________________________\n";
+    std::cout << "\n" << header << "\n";
+    std::cout << "____________________________\n\n";
+    std::cout << "1. Podaj imie\n";
+    std::cout << "2. Podaj nazwisko\n";
+    std::cout << "0. Powrot do menu glownego\n";
+    std::cout << "____________________________\n";
 }
 void wyswietlKontakty(std::vector<kontakt> &kontakty) {
     if (kontakty.empty()) wyswietlMenuGlowne("Ksiazka adresowa jest pusta!");
@@ -99,7 +158,7 @@ void wyswietlKontakty(std::vector<kontakt> &kontakty) {
             kontakt * biezacyKontakt = &(*itr);
             formatWyswietlania(biezacyKontakt);
         }
-        cout << "Nacisnij dowolny przycisk, aby kontynuowac...";
+        std::cout << "Nacisnij dowolny przycisk, aby kontynuowac...";
         getch();
         wyswietlMenuGlowne();
     }
@@ -148,27 +207,27 @@ void edytujKontakt(kontakt* kontaktDoEdycji) {
     switch (wybor) {
     case '1':
         std::cout << "Podaj imie:";
-        getline(cin, temp);
+        getline(std::cin, temp);
         kontaktDoEdycji->imie = temp;
         break;
     case '2':
         std::cout << "Podaj nazwisko:";
-        getline(cin, temp);
+        getline(std::cin, temp);
         kontaktDoEdycji->nazwisko = temp;
         break;
     case '3':
         std::cout << "Podaj numer telefonu:";
-        getline(cin, temp);
+        getline(std::cin, temp);
         kontaktDoEdycji->telefon = temp;
         break;
     case '4':
         std::cout << "Podaj email:";
-        getline(cin, temp);
+        getline(std::cin, temp);
         kontaktDoEdycji->email = temp;
         break;
     case '5':
         std::cout << "Podaj adres:";
-        getline(cin, temp);
+        getline(std::cin, temp);
         kontaktDoEdycji->adres = temp;
         break;
     case '0':
@@ -179,8 +238,8 @@ void edytujKontakt(kontakt* kontaktDoEdycji) {
         break;
     }
 }
-void wyszukajKontakt(std::vector<kontakt> &kontakty, string szukane, char wybor) {
-    string znalezione;
+void wyszukajKontakt(std::vector<kontakt> &kontakty, std::string szukane, char wybor) {
+    std::string znalezione;
     std::vector<std::vector<kontakt>::iterator> znalezioneKontakty;
     if (kontakty.empty()) wyswietlPodmenuSzukaj("Ksiazka adresowa jest pusta!");
     else {
@@ -190,8 +249,8 @@ void wyszukajKontakt(std::vector<kontakt> &kontakty, string szukane, char wybor)
             if (wybor == '1') znalezione = biezacyKontakt->imie;
             else if (wybor == '2') znalezione = biezacyKontakt->nazwisko;
             if (znalezione == szukane) {
-                cout << "Znaleziono kontakt: " << "ID: " << biezacyKontakt->id;
-                std::cout <<" | " << szukane << endl;
+                std::cout << "Znaleziono kontakt: " << "ID: " << biezacyKontakt->id;
+                std::cout <<" | " << szukane << std::endl;
                 znalezioneKontakty.push_back(itr);
                 formatWyswietlania(biezacyKontakt);
             }
@@ -241,18 +300,18 @@ void wyszukajKontakt(std::vector<kontakt> &kontakty, string szukane, char wybor)
 }
 void podmenuSzukaj(std::vector<kontakt> &ksiazkaAdresowa) {
     char podWybor = '9';
-    string szukane;
+    std::string szukane;
     while(podWybor!= '0') {
         podWybor = getch();
         switch(podWybor) {
         case '1':
-            cout <<"Podaj imie: ";
-            getline(cin, szukane);
+            std::cout <<"Podaj imie: ";
+            getline(std::cin, szukane);
             wyszukajKontakt(ksiazkaAdresowa, szukane, podWybor);
             break;
         case '2':
-            cout <<"Podaj nazwisko: ";
-            getline(cin, szukane);
+            std::cout <<"Podaj nazwisko: ";
+            getline(std::cin, szukane);
             wyszukajKontakt(ksiazkaAdresowa, szukane, podWybor);
             break;
         case '0':
@@ -264,31 +323,20 @@ void podmenuSzukaj(std::vector<kontakt> &ksiazkaAdresowa) {
         }
     }
 }
-kontakt wczytajKontaktZPliku(fstream &plik) {
-    string temp;
-    std::vector<string> linijkaKontaktu;
-    kontakt wczytanyKontakt;
-    getline(plik, temp);
-    linijkaKontaktu = split(temp, '|');
-    wczytanyKontakt.id = stoi(linijkaKontaktu[0]);
-    wczytanyKontakt.imie = linijkaKontaktu[1];
-    wczytanyKontakt.nazwisko = linijkaKontaktu[2];
-    wczytanyKontakt.telefon = linijkaKontaktu[3];
-    wczytanyKontakt.email = linijkaKontaktu[4];
-    wczytanyKontakt.adres = linijkaKontaktu[5];
-    return wczytanyKontakt;
-}
 int wczytajKsiazkeAdresowa(std::vector<kontakt> &ksiazkaAdresowa) {
-    string temp;
-    fstream plik;
-    plik.open("ksiazkaAdresowa_vec.txt", ios::in);
+    std::string temp;
+    std::fstream plik;
+    plik.open("ksiazkaAdresowa_vec.txt", std::ios::in);
     int lokalneId = 0;
+    unsigned int otherUser = 0;
     getline(plik, temp);
     while(!plik.eof()) {
-        kontakt nowyKontakt = wczytajKontaktZPliku(plik);
-        ksiazkaAdresowa.push_back(nowyKontakt);
+        kontakt nowyKontakt = wczytajKontaktZPliku(plik, otherUser);
         if (nowyKontakt.id > lokalneId) {
             lokalneId = nowyKontakt.id;
+        }
+        if (otherUser == userId) {
+            ksiazkaAdresowa.push_back(nowyKontakt);
         }
     }
     plik.close();
@@ -302,15 +350,23 @@ std::string pobierzImieOsatniegoKontaktu(std::vector<kontakt> ksiazkaAdresowa) {
 void usunKontakt(std::vector<kontakt>::iterator kontaktDoUsuniecia, std::vector<kontakt> &ksiazkaAdresowa) {
     ksiazkaAdresowa.erase(kontaktDoUsuniecia);
 }
-int main() {
-    fstream plik;
+void showMenuSignedIn(std::string header = "Poprawne logowanie!\n") {
+    std::cout << "\n" << header << "\n";
+    std::cout << "____________________________\n\n";
+    std::cout << "1. Zmiana hasla\n";
+    std::cout << "2. Wylogowanie\n";
+    std::cout << "3. Przejscie do aplikacji\n";
+    std::cout << "____________________________\n";
+}
+void maitainAdressBookMenu(unsigned int &userId) {
+    std::fstream plik;
     int wybor;
     int ostatnieId = 0;
     std::vector<kontakt> ksiazkaAdresowa;
-    plik.open("ksiazkaAdresowa_vec.txt", ios::in);
+    plik.open("ksiazkaAdresowa_vec.txt", std::ios::in);
     if (plik.good() == false) {
-        ofstream plik("ksiazkaAdresowa_vec.txt");
-        plik.open("ksiazkaAdresowa_vec.txt", ios::in);
+        std::ofstream plik("ksiazkaAdresowa_vec.txt");
+        plik.open("ksiazkaAdresowa_vec.txt", std::ios::in);
         system("cls");
     }
     plik.close();
@@ -321,15 +377,15 @@ int main() {
         switch(wybor) {
         case '0':
             system("cls");
-            cout << "Koniec programu" << endl;
+            showMenuSignedIn("Zamknieto ksiazke adresowa");
             break;
-        case '1': {
+        case '1': { //dodaj Nowy kontakt
             std::vector<kontakt>::reverse_iterator ostatniElement;
             system("cls");
             dodajNowyKontakt(ksiazkaAdresowa, ostatnieId);
             ostatniElement = ksiazkaAdresowa.rbegin();
-            plik.open("ksiazkaAdresowa_vec.txt", ios::out | ios::app);
-            zapiszKontaktDoPliku(*ostatniElement, plik);
+            plik.open("ksiazkaAdresowa_vec.txt", std::ios::out | std::ios::app);
+            zapiszKontaktDoPliku(*ostatniElement, plik, userId);
             plik.close();
             wyswietlMenuGlowne("Poprawnie dodano kontakt: " + pobierzImieOsatniegoKontaktu(ksiazkaAdresowa));
             break;
@@ -346,5 +402,216 @@ int main() {
             wyswietlMenuGlowne("Wybierz poprawna opcje!");
         }
     }
+
+}
+void showMainMenu(std::string header = "MENU GLOWNE") {
+    std::cout << "\n" << header << "\n";
+    std::cout << "____________________________\n\n";
+    std::cout << "1. Logowanie\n";
+    std::cout << "2. Rejestracja\n";
+    std::cout << "0. Zamknij program\n";
+    std::cout << "____________________________\n";
+}
+std::string getUsername() {
+    std::string inputUsername;
+    std::cout << "Podaj login\n";
+    getline(std::cin, inputUsername);
+    return inputUsername;
+}
+bool isInsertedUsernameCorrect(std::map<std::string, std::string>& registeredUsers, std::string& username) {
+    std::pair<std::map<std::string,std::string>::iterator,bool> ret;
+    ret = registeredUsers.insert(
+              std::pair<std::string, std::string>(username, "") );
+    return ret.second;
+}
+std::string getPassword() {
+    std::string inputPass;
+    std::cout << "Podaj haslo\n";
+    getline(std::cin, inputPass);
+    return inputPass;
+}
+bool isPasswordCorrect(std::string& password) {
+    int passLength = password.length();
+    if (passLength >= 4) return true;
+    else return false;
+}
+std::string createCorrectUsername(std::map<std::string, std::string>& registeredUsers) {
+    bool confirmUsername = false;
+    do {
+        std::string newUsername = getUsername();
+        confirmUsername = isInsertedUsernameCorrect(registeredUsers, newUsername);
+        if (confirmUsername == true) {
+            std::cout << "Poprawnie dodano uzytkownika\n";
+            userId = registeredUsers.size();
+            return newUsername;
+        } else {
+            std::cout << "Taki uzytkownik juz istnieje\n";
+            std::cout << "Podaj inny login\n";
+        }
+    } while(confirmUsername == false);
+    return "";
+}
+std::string getCorrectPassword() {
+    unsigned int wrongPasswordApproach = 0;
+    std::string inputPass ;
+    do {
+        wrongPasswordApproach++;
+        inputPass = getPassword();
+        if (isPasswordCorrect(inputPass)) {
+            return inputPass;
+        } else {
+            std::cout << "Haslo musi posiadac przynajmniej 4 znaki\n";
+        }
+    } while (isPasswordCorrect(inputPass) == false);
+    return "";
+}
+void saveUserData2File(std::map<std::string, std::string>& registeredUsers, std::string &user) {
+    std::string fileName = "zarejestrowani_uzytkownicy.txt";
+    std::fstream file;
+    file.open(fileName, std::ios::out | std::ios::app);
+    std::map<std::string, std::string>::iterator userItr;
+    userItr = registeredUsers.find(user);
+    file << registeredUsers.size() << '|';
+    file << userItr->first << '|';
+    file << userItr->second << '\n';
+    file.close();
+}
+std::string createUser(std::map<std::string, std::string>& registeredUsers) {
+    std::string newUser;
+    newUser = createCorrectUsername(registeredUsers);
+    registeredUsers[newUser] = getCorrectPassword();
+    saveUserData2File(registeredUsers, newUser);
+    return newUser;
+}
+std::map<std::string, std::string>::iterator getRegisteredUser(std::map<std::string, std::string>& registeredUsers) {
+    std::map<std::string, std::string>::iterator usernameItr;
+    do {
+        std::string userToLogIn = getUsername();
+        usernameItr = registeredUsers.find(userToLogIn);
+        if (usernameItr == registeredUsers.end()) {
+            std::cout << "Uzytkownik o podanym loginie nie istnieje, podaj wlasciwy login\n";
+        }
+    } while (usernameItr == registeredUsers.end());
+    return usernameItr;
+}
+bool isPasswordMatch(std::map<std::string, std::string>::iterator &usernameItr) {
+    std::string password = getPassword();
+    if (usernameItr->second == password) return true;
+    else return false;
+}
+bool isPasswordVerified(std::map<std::string, std::string>::iterator &usernameItr) {
+    unsigned int wrongPasswordAttempt = 0;
+    while (isPasswordMatch(usernameItr) == false ) {
+        wrongPasswordAttempt++;
+        if (wrongPasswordAttempt >= 3) {
+            std::cout << "Blednie wpisano haslo 3 razy, nalezy odczekac 5 sekund\n";
+            wrongPasswordAttempt = 0;
+            Sleep(5000);
+        }
+    }
+    return true;
+}
+std::map<std::string, std::string>::iterator getSignedInUser (std::map<std::string, std::string>& registeredUsers) {
+    std::map<std::string, std::string>::iterator usernameItr;
+    usernameItr = getRegisteredUser(registeredUsers);
+    if (usernameItr != registeredUsers.end() ) {
+        if (isPasswordVerified(usernameItr) ) return usernameItr;
+    } else return registeredUsers.end();
+}
+void changePassword(std::map<std::string, std::string>::iterator &usernameItr) {
+    std::string newPassword = getCorrectPassword();
+    usernameItr->second = newPassword;
+}
+void maitainMenuSignedIn(std::map<std::string, std::string> &registeredUsers, std::map<std::string, std::string>::iterator &usernameItr) {
+    char choice = '\0';
+    while(choice != '2') {
+        choice = getch();
+        switch(choice) {
+        case '1':
+            system("cls");
+            changePassword(usernameItr);
+            showMenuSignedIn("Poprawnie zmieniono haslo");
+            break;
+        case '2':
+            system("cls");
+            showMainMenu("Wylogowano uzytkownika");
+            break;
+        case '3':
+
+            maitainAdressBookMenu(userId);
+//            choice = '2';
+            break;
+        default:
+            break;
+        }
+
+    }
+
+}
+std::vector<std::string> loadRegisteredUsers(std::map<std::string, std::string>& registeredUsers) {
+    std::string temp;
+    std::fstream file;
+    std::vector<std::string> registeredUsersIds;
+    std::vector<std::string> userDataLine;
+    file.open("zarejestrowani_uzytkownicy.txt", std::ios::in);
+    getline(file, temp);
+    while(!file.eof()) {
+        userDataLine = split(temp, '|');
+        std::string loadedUser = userDataLine[1];
+        registeredUsersIds.push_back(loadedUser);
+        registeredUsers[loadedUser] = userDataLine[2];
+        getline(file, temp);
+    }
+    file.close();
+    return registeredUsersIds;
+}
+void maitainSignInMenu(std::map<std::string, std::string> &registeredUsers) {
+    std::vector<std::string> registeredUsersIds;
+    std::fstream registeredUsersFile;
+    std::string registeredUsersFileName = "zarejestrowani_uzytkownicy.txt";
+    createFileIfNotExist(registeredUsersFileName);
+    registeredUsersIds = loadRegisteredUsers(registeredUsers);
+    if (registeredUsers.size() != 0) userId = registeredUsers.size();
+    char choice = '\0';
+    showMainMenu();
+    while(choice != '0') {
+        choice = getch();
+        switch(choice) {
+        case '1': {
+            std::map<std::string, std::string>::iterator signedUser = getSignedInUser(registeredUsers);
+            if ( signedUser != registeredUsers.end() ) {
+//                for (std::vector<std::string>::iterator itr = registeredUsersIds.begin(), finishItr = registeredUsersIds.end();
+//                     itr != finishItr; itr++){
+//                        if
+//                     }
+                for (unsigned int i = 0; i < registeredUsersIds.size(); i++){
+                    if (registeredUsersIds[i] == signedUser->first) userId = i+1;
+                }
+                showMenuSignedIn();
+                maitainMenuSignedIn(registeredUsers, signedUser);
+            }
+            break;
+        }
+        case '2': {
+            system("cls");
+            std::string createdUser = createUser(registeredUsers);
+            showMainMenu("Poprawnie dodano uzytkownika: " + createdUser);
+            registeredUsersIds.push_back(createdUser);
+            break;
+        }
+        case '0':
+            system("cls");
+            std::cout << "Koniec programu\n";
+            break;
+        default:
+            break;
+        }
+
+    }
+
+}
+int main() {
+    std::map<std::string, std::string> registeredUsers;
+    maitainSignInMenu(registeredUsers);
     return 0;
 }
